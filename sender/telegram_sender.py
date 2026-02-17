@@ -7,7 +7,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from telegram import Bot
+from telegram import Bot, InputMediaPhoto, InputMediaVideo
 from telegram.constants import ParseMode
 from telegram.error import TelegramError, RetryAfter
 
@@ -85,10 +85,11 @@ def _escape_html(text: str) -> str:
 async def send_to_channel(post_data: dict) -> bool:
     """
     Send a post to the Telegram channel.
+    Supports single media, multi-image albums, and text-only posts.
 
     Args:
         post_data: Dict with keys: source, source_id, channel_name, text,
-                   media_path, media_type, original_link
+                   media_path, media_type, media_paths, original_link
 
     Returns:
         True if sent successfully, False otherwise
@@ -105,19 +106,26 @@ async def send_to_channel(post_data: dict) -> bool:
         message_text = _format_message(post_data)
         media_path = post_data.get("media_path")
         media_type = post_data.get("media_type")
+        media_paths = post_data.get("media_paths", [])  # For albums
 
         sent = False
         max_retries = 3
 
         for attempt in range(max_retries):
             try:
-                if media_path and Path(media_path).exists():
+                # --- ALBUM (multiple images) ---
+                if media_paths and len(media_paths) > 1:
+                    sent = await _send_album(bot, channel_id, message_text, media_paths)
+                    break
+
+                # --- SINGLE MEDIA ---
+                elif media_path and Path(media_path).exists():
                     # Check file size - Telegram Bot API limit is 50MB
                     file_size_mb = Path(media_path).stat().st_size / (1024 * 1024)
-                    logger.info(f"📎 Media: {media_type}, size: {file_size_mb:.1f}MB, path: {media_path}")
+                    logger.info(f"📎 Media: {media_type}, size: {file_size_mb:.1f}MB")
 
                     if file_size_mb > 50:
-                        logger.warning(f"⚠️  File too large for Telegram Bot API ({file_size_mb:.1f}MB > 50MB), sending text only")
+                        logger.warning(f"⚠️  File too large ({file_size_mb:.1f}MB > 50MB), sending text only")
                         await bot.send_message(
                             chat_id=channel_id,
                             text=message_text,
@@ -126,14 +134,11 @@ async def send_to_channel(post_data: dict) -> bool:
                         )
                         sent = True
                         break
+
                     # Telegram caption limit: 1024 chars for media
                     caption = message_text
-                    send_followup = False
-
                     if len(message_text) > 1024:
-                        # Truncate caption and send full text as follow-up
                         caption = message_text[:1020] + "..."
-                        send_followup = True
 
                     if media_type == "photo":
                         with open(media_path, "rb") as photo:
@@ -165,16 +170,8 @@ async def send_to_channel(post_data: dict) -> bool:
                             )
                         sent = True
 
-                    # Send full text as follow-up if caption was truncated
-                    if sent and send_followup:
-                        await bot.send_message(
-                            chat_id=channel_id,
-                            text=message_text,
-                            parse_mode=ParseMode.HTML,
-                            disable_web_page_preview=True,
-                        )
+                # --- TEXT ONLY ---
                 else:
-                    # Text-only message (4096 char limit)
                     await bot.send_message(
                         chat_id=channel_id,
                         text=message_text,
@@ -205,4 +202,51 @@ async def send_to_channel(post_data: dict) -> bool:
 
     except Exception as e:
         logger.error(f"❌ Telegram sender error: {e}", exc_info=True)
+        return False
+
+
+async def _send_album(bot: Bot, channel_id: str, message_text: str, media_paths: list) -> bool:
+    """Send multiple photos as an album (media group) to Telegram."""
+    try:
+        media_group = []
+        caption = message_text
+        if len(message_text) > 1024:
+            caption = message_text[:1020] + "..."
+
+        for i, mp in enumerate(media_paths):
+            path = mp.get("path", "") if isinstance(mp, dict) else mp
+            mtype = mp.get("type", "photo") if isinstance(mp, dict) else "photo"
+
+            if not path or not Path(path).exists():
+                continue
+
+            # Only the first item gets the caption
+            item_caption = caption if i == 0 else None
+
+            if mtype == "video":
+                with open(path, "rb") as f:
+                    media_group.append(InputMediaVideo(
+                        media=f.read(),
+                        caption=item_caption,
+                        parse_mode=ParseMode.HTML if item_caption else None,
+                        supports_streaming=True,
+                    ))
+            else:
+                with open(path, "rb") as f:
+                    media_group.append(InputMediaPhoto(
+                        media=f.read(),
+                        caption=item_caption,
+                        parse_mode=ParseMode.HTML if item_caption else None,
+                    ))
+
+        if not media_group:
+            logger.warning("⚠️  No valid media in album, skipping")
+            return False
+
+        await bot.send_media_group(chat_id=channel_id, media=media_group)
+        logger.info(f"📸 Sent album with {len(media_group)} items")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Album send error: {e}", exc_info=True)
         return False
