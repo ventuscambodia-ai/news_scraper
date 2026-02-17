@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 media/tmp/
 data/*.db
+!data/settings.json
 venv/
 .venv/
 logs/
