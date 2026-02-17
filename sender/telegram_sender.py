@@ -112,6 +112,20 @@ async def send_to_channel(post_data: dict) -> bool:
         for attempt in range(max_retries):
             try:
                 if media_path and Path(media_path).exists():
+                    # Check file size - Telegram Bot API limit is 50MB
+                    file_size_mb = Path(media_path).stat().st_size / (1024 * 1024)
+                    logger.info(f"📎 Media: {media_type}, size: {file_size_mb:.1f}MB, path: {media_path}")
+
+                    if file_size_mb > 50:
+                        logger.warning(f"⚠️  File too large for Telegram Bot API ({file_size_mb:.1f}MB > 50MB), sending text only")
+                        await bot.send_message(
+                            chat_id=channel_id,
+                            text=message_text,
+                            parse_mode=ParseMode.HTML,
+                            disable_web_page_preview=False,
+                        )
+                        sent = True
+                        break
                     # Telegram caption limit: 1024 chars for media
                     caption = message_text
                     send_followup = False

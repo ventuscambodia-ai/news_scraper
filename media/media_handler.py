@@ -70,12 +70,17 @@ async def download_telegram_media(client, message) -> tuple:
         file_path = config.MEDIA_TMP_DIR / filename
 
         # Download the media
-        logger.debug(f"⬇️  Downloading {media_type}: {filename}")
+        logger.info(f"⬇️  Downloading {media_type}: {filename}")
         await client.download_media(message, file=str(file_path))
 
         if file_path.exists():
             size_mb = file_path.stat().st_size / (1024 * 1024)
             logger.info(f"✅ Downloaded {media_type}: {filename} ({size_mb:.1f}MB)")
+
+            # Telegram Bot API limit: 50MB for files
+            if size_mb > 50:
+                logger.warning(f"⚠️  {media_type} too large for Telegram Bot API ({size_mb:.1f}MB > 50MB)")
+
             return str(file_path), media_type
         else:
             logger.warning(f"⚠️  Download failed: file not created")
