@@ -5,6 +5,7 @@ Flask-based settings UI for managing sources, filters, and viewing activity.
 
 import asyncio
 import logging
+import os
 import threading
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for
 from flask_cors import CORS
@@ -1092,7 +1093,7 @@ DASHBOARD_HTML = """
             if (!data.length) { c.innerHTML = '<div class="empty-state">No activity yet</div>'; return; }
             c.innerHTML = data.map(e => `
                 <div class="log-entry ${e.level}">
-                    <span class="time">${new Date(e.timestamp).toLocaleString()}</span>
+                    <span class="time">${e.timestamp}</span>
                     <span class="source">${e.source || '—'}</span>
                     <span class="msg">${e.message}</span>
                 </div>
@@ -1109,7 +1110,7 @@ DASHBOARD_HTML = """
                     <div class="post-icon ${p.source === 'telegram' ? 'tg' : 'x'}">${p.source === 'telegram' ? '📡' : '𝕏'}</div>
                     <div class="post-body">
                         <div class="post-title">${escapeHtml(p.title || 'No title')}</div>
-                        <div class="post-meta">${new Date(p.sent_at).toLocaleString()} · ${p.source}</div>
+                        <div class="post-meta">${p.sent_at} · ${p.source}</div>
                         <div class="post-badges">
                             ${p.sent_to_telegram ? '<span class="badge tg">Telegram</span>' : ''}
                             ${p.sent_to_facebook ? '<span class="badge fb">Facebook</span>' : ''}
@@ -1268,9 +1269,18 @@ DASHBOARD_HTML = """
             try {
                 const res = await fetch('/api/credentials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(creds) });
                 if (res.ok) {
-                    showToast('Saved! Restart to apply.', 'success');
+                    showToast('Saved & validated! Check Activity Log.', 'success');
                     Object.keys(fields).forEach(id => document.getElementById(id).value = '');
                     loadApiKeys(); loadApiStatus();
+                    // Switch to Activity tab to show validation results
+                    setTimeout(() => {
+                        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                        const activityTab = document.querySelectorAll('.tab')[3];
+                        activityTab.classList.add('active');
+                        document.getElementById('tab-activity').classList.add('active');
+                        loadActivity();
+                    }, 500);
                 } else {
                     const e = await res.json();
                     showToast('Failed: ' + (e.error || 'Unknown'), 'error');
@@ -1422,9 +1432,193 @@ def save_credentials():
             f.writelines(new_lines)
 
         # Reload env vars into current process
-        import os
         for key, val in data.items():
             os.environ[key] = val
+        config.reload_env()
+
+        # Log credential update to activity
+        loop = asyncio.new_event_loop()
+        try:
+            from database import log_activity as db_log
+
+            # Build friendly names for what was updated
+            key_labels = {
+                "TELEGRAM_API_ID": "Telegram API ID",
+                "TELEGRAM_API_HASH": "Telegram API Hash",
+                "TELEGRAM_PHONE": "Telegram Phone",
+                "TELEGRAM_BOT_TOKEN": "Telegram Bot Token",
+                "TELEGRAM_CHANNEL_ID": "Telegram Channel ID",
+                "X_BEARER_TOKEN": "X Bearer Token",
+                "FACEBOOK_PAGE_ACCESS_TOKEN": "Facebook Page Token",
+                "FACEBOOK_PAGE_ID": "Facebook Page ID",
+            }
+            updated_names = [key_labels.get(k, k) for k in data.keys()]
+            loop.run_until_complete(
+                db_log("info", f"API credentials updated: {', '.join(updated_names)}", "dashboard")
+            )
+
+            # ─── Validate each API ───────────────────────────
+            import requests as http_requests
+
+            # Check Telegram User API
+            if config.TELEGRAM_API_ID and config.TELEGRAM_API_HASH:
+                try:
+                    api_id = int(config.TELEGRAM_API_ID)
+                    api_hash = config.TELEGRAM_API_HASH.strip()
+                    errors = []
+                    if api_id <= 0:
+                        errors.append("API ID must be a positive number")
+                    if len(api_hash) != 32:
+                        errors.append(f"API Hash must be 32 characters (got {len(api_hash)})")
+                    if not all(c in '0123456789abcdef' for c in api_hash):
+                        errors.append("API Hash must contain only hex characters (0-9, a-f)")
+
+                    if errors:
+                        loop.run_until_complete(
+                            db_log("error", f"❌ Telegram User API — {'; '.join(errors)}", "telegram")
+                        )
+                    else:
+                        # Check if session file exists (meaning we've connected before)
+                        import pathlib
+                        session_file = pathlib.Path(config.BASE_DIR / f"{config.TELEGRAM_SESSION_NAME}.session")
+                        if session_file.exists():
+                            loop.run_until_complete(
+                                db_log("info", "✅ Telegram User API — credentials valid, session exists (restart to connect)", "telegram")
+                            )
+                        else:
+                            loop.run_until_complete(
+                                db_log("info", "✅ Telegram User API — credentials format valid (restart to authenticate)", "telegram")
+                            )
+                except ValueError:
+                    loop.run_until_complete(
+                        db_log("error", "❌ Telegram User API — API ID must be a number", "telegram")
+                    )
+                except Exception as e:
+                    loop.run_until_complete(
+                        db_log("error", f"❌ Telegram User API — {e}", "telegram")
+                    )
+            else:
+                loop.run_until_complete(
+                    db_log("warning", "⚠️ Telegram User API — not configured (missing API ID or Hash)", "telegram")
+                )
+
+            # Check Telegram Bot
+            if config.TELEGRAM_BOT_TOKEN:
+                try:
+                    resp = http_requests.get(
+                        f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/getMe",
+                        timeout=10
+                    )
+                    bot_data = resp.json()
+                    if bot_data.get("ok"):
+                        bot_name = bot_data["result"].get("first_name", "Unknown")
+                        bot_username = bot_data["result"].get("username", "")
+                        loop.run_until_complete(
+                            db_log("info", f"✅ Telegram Bot — connected as @{bot_username} ({bot_name})", "telegram")
+                        )
+                    else:
+                        loop.run_until_complete(
+                            db_log("error", f"❌ Telegram Bot — invalid token: {bot_data.get('description', 'Unknown error')}", "telegram")
+                        )
+                except Exception as e:
+                    loop.run_until_complete(
+                        db_log("error", f"❌ Telegram Bot — connection failed: {e}", "telegram")
+                    )
+            elif "TELEGRAM_BOT_TOKEN" in data:
+                loop.run_until_complete(
+                    db_log("warning", "⚠️ Telegram Bot — token is empty", "telegram")
+                )
+
+            # Check Telegram Channel
+            if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHANNEL_ID:
+                try:
+                    resp = http_requests.get(
+                        f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/getChat",
+                        params={"chat_id": config.TELEGRAM_CHANNEL_ID},
+                        timeout=10
+                    )
+                    chat_data = resp.json()
+                    if chat_data.get("ok"):
+                        chat_title = chat_data["result"].get("title", "Unknown")
+                        loop.run_until_complete(
+                            db_log("info", f"✅ Telegram Channel — connected to \"{chat_title}\"", "telegram")
+                        )
+                    else:
+                        loop.run_until_complete(
+                            db_log("error", f"❌ Telegram Channel — {chat_data.get('description', 'Bot cannot access channel')}", "telegram")
+                        )
+                except Exception as e:
+                    loop.run_until_complete(
+                        db_log("error", f"❌ Telegram Channel — check failed: {e}", "telegram")
+                    )
+
+            # Check X API
+            if config.X_BEARER_TOKEN:
+                try:
+                    resp = http_requests.get(
+                        "https://api.x.com/2/users/me",
+                        headers={"Authorization": f"Bearer {config.X_BEARER_TOKEN}"},
+                        timeout=10
+                    )
+                    if resp.status_code == 200:
+                        loop.run_until_complete(
+                            db_log("info", "✅ X (Twitter) API — bearer token is valid", "x")
+                        )
+                    elif resp.status_code == 401:
+                        loop.run_until_complete(
+                            db_log("error", "❌ X (Twitter) API — bearer token is invalid (401 Unauthorized)", "x")
+                        )
+                    elif resp.status_code == 403:
+                        # 403 means token is valid but endpoint needs different access level
+                        loop.run_until_complete(
+                            db_log("info", "✅ X (Twitter) API — bearer token accepted (some endpoints may need elevated access)", "x")
+                        )
+                    else:
+                        loop.run_until_complete(
+                            db_log("warning", f"⚠️ X (Twitter) API — unexpected response: {resp.status_code}", "x")
+                        )
+                except Exception as e:
+                    loop.run_until_complete(
+                        db_log("error", f"❌ X (Twitter) API — connection failed: {e}", "x")
+                    )
+            elif "X_BEARER_TOKEN" in data:
+                loop.run_until_complete(
+                    db_log("warning", "⚠️ X (Twitter) API — bearer token is empty", "x")
+                )
+
+            # Check Facebook
+            if config.FACEBOOK_PAGE_ACCESS_TOKEN and config.FACEBOOK_PAGE_ID:
+                try:
+                    resp = http_requests.get(
+                        f"https://graph.facebook.com/{config.FACEBOOK_API_VERSION}/{config.FACEBOOK_PAGE_ID}",
+                        params={"access_token": config.FACEBOOK_PAGE_ACCESS_TOKEN, "fields": "name,id"},
+                        timeout=10
+                    )
+                    fb_data = resp.json()
+                    if "name" in fb_data:
+                        loop.run_until_complete(
+                            db_log("info", f"✅ Facebook Page — connected to \"{fb_data['name']}\" (ID: {fb_data['id']})", "facebook")
+                        )
+                    elif "error" in fb_data:
+                        err_msg = fb_data["error"].get("message", "Unknown error")
+                        loop.run_until_complete(
+                            db_log("error", f"❌ Facebook Page — {err_msg}", "facebook")
+                        )
+                    else:
+                        loop.run_until_complete(
+                            db_log("warning", f"⚠️ Facebook Page — unexpected response", "facebook")
+                        )
+                except Exception as e:
+                    loop.run_until_complete(
+                        db_log("error", f"❌ Facebook Page — connection failed: {e}", "facebook")
+                    )
+            elif "FACEBOOK_PAGE_ACCESS_TOKEN" in data or "FACEBOOK_PAGE_ID" in data:
+                loop.run_until_complete(
+                    db_log("warning", "⚠️ Facebook Page — missing token or page ID", "facebook")
+                )
+
+        finally:
+            loop.close()
 
         logger.info(f"🔑 API credentials updated: {list(data.keys())}")
         return jsonify({"success": True, "updated": list(data.keys())})

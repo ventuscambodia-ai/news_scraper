@@ -135,6 +135,11 @@ class TelegramScraper:
             if settings.get("facebook_posting_enabled", False):
                 fb_sent = await send_to_facebook(post_data)
 
+            # Cleanup media file after ALL senders have finished
+            if media_path:
+                from media.media_handler import cleanup_media
+                cleanup_media(media_path)
+
             # Mark as sent
             await mark_sent(
                 "telegram", source_id, text,

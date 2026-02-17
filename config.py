@@ -101,3 +101,23 @@ def is_configured() -> dict:
         "x_api": bool(X_BEARER_TOKEN),
         "facebook": bool(FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_PAGE_ID),
     }
+
+
+def reload_env():
+    """Reload environment variables and update module-level config."""
+    global TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_PHONE
+    global TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID
+    global X_BEARER_TOKEN
+    global FACEBOOK_PAGE_ACCESS_TOKEN, FACEBOOK_PAGE_ID, FACEBOOK_POSTING_ENABLED
+
+    load_dotenv(override=True)
+
+    TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID", "")
+    TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH", "")
+    TELEGRAM_PHONE = os.getenv("TELEGRAM_PHONE", "")
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "")
+    X_BEARER_TOKEN = os.getenv("X_BEARER_TOKEN", "")
+    FACEBOOK_PAGE_ACCESS_TOKEN = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN", "")
+    FACEBOOK_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID", "")
+    FACEBOOK_POSTING_ENABLED = os.getenv("FACEBOOK_POSTING_ENABLED", "true").lower() == "true"

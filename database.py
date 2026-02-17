@@ -79,10 +79,14 @@ async def mark_sent(source: str, source_id: str, content: str,
 
 async def log_activity(level: str, message: str, source: str = None):
     """Log an activity to the database for dashboard display."""
+    from datetime import timezone, timedelta
+    # Use Cambodia timezone (UTC+7)
+    cambodia_tz = timezone(timedelta(hours=7))
+    now = datetime.now(cambodia_tz).strftime("%Y-%m-%d %H:%M:%S")
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute(
-            "INSERT INTO activity_log (level, source, message) VALUES (?, ?, ?)",
-            (level, source, message)
+            "INSERT INTO activity_log (timestamp, level, source, message) VALUES (?, ?, ?, ?)",
+            (now, level, source, message)
         )
         await db.commit()
 

@@ -1,8 +1,13 @@
 {
-  "telegram_sources": [],
-  "x_accounts": [
-    "elonmusk"
+  "telegram_sources": [
+    "rsecon",
+    "tradingbycfai",
+    "binance_wallet_announcements",
+    "twobserve",
+    "drprofitfreebycf",
+    "thehackernews"
   ],
+  "x_accounts": [],
   "x_hashtags": [
     "breaking"
   ],

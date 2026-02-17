@@ -92,7 +92,7 @@ async def main():
     telegram_scraper = TelegramScraper()
     x_scraper = XScraper()
 
-    # Start dashboard in a separate thread
+    # Start dashboard in a separate thread (always runs)
     dashboard_task = None
     try:
         from dashboard.app import start_dashboard_async
@@ -101,31 +101,39 @@ async def main():
     except Exception as e:
         logger.warning(f"⚠️  Dashboard failed to start: {e}")
 
-    # Create tasks for scrapers
+    # Create tasks list — dashboard is always included
     tasks = []
+    if dashboard_task:
+        tasks.append(dashboard_task)
+
+    # Helper to wrap scrapers so failures don't crash the app
+    async def safe_scraper(name, coro):
+        try:
+            await coro
+        except asyncio.CancelledError:
+            logger.info(f"🛑 {name} scraper stopped")
+        except Exception as e:
+            logger.error(f"❌ {name} scraper failed: {e}")
+            await log_activity("error", f"{name} scraper failed: {e}", name.lower())
 
     if api_status["telegram_user"]:
-        tasks.append(asyncio.create_task(telegram_scraper.start()))
+        tasks.append(asyncio.create_task(safe_scraper("Telegram", telegram_scraper.start())))
         logger.info("🚀 Telegram scraper starting...")
     else:
         logger.warning("⏭️  Skipping Telegram scraper (not configured)")
 
     if api_status["x_api"]:
-        tasks.append(asyncio.create_task(x_scraper.start()))
+        tasks.append(asyncio.create_task(safe_scraper("X", x_scraper.start())))
         logger.info("🚀 X scraper starting...")
     else:
         logger.warning("⏭️  Skipping X scraper (not configured)")
 
-    if not tasks:
-        logger.warning("⚠️  No scrapers configured! Please set up your API keys in .env")
-        logger.info("🌐 Dashboard is still running for configuration at http://localhost:{config.DASHBOARD_PORT}")
-
-        # Keep dashboard running even if no scrapers
-        if dashboard_task:
-            tasks.append(dashboard_task)
+    if len(tasks) <= 1:
+        logger.warning("⚠️  No scrapers configured! Use the dashboard to set up API keys.")
+        logger.info(f"🌐 Open http://localhost:{config.DASHBOARD_PORT} → Settings → API Configuration")
 
     if not tasks:
-        logger.error("❌ Nothing to run. Please configure at least one API or use the dashboard.")
+        logger.error("❌ Nothing to run. Dashboard and scrapers both failed to start.")
         return
 
     # Graceful shutdown handling
@@ -134,8 +142,6 @@ async def main():
     def signal_handler(sig, frame):
         logger.info("🛑 Shutdown signal received...")
         shutdown_event.set()
-        telegram_scraper.stop()
-        x_scraper.stop()
         for task in tasks:
             task.cancel()
 

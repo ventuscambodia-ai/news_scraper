@@ -12,7 +12,6 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError, RetryAfter
 
 import config
-from media.media_handler import cleanup_media
 
 logger = logging.getLogger("sender.telegram")
 
@@ -163,9 +162,7 @@ async def send_to_channel(post_data: dict) -> bool:
                 if attempt < max_retries - 1:
                     await asyncio.sleep(5)
 
-        # Cleanup media file after sending
-        if media_path:
-            cleanup_media(media_path)
+        # Note: media cleanup is handled by the scraper after all senders finish
 
         if sent:
             logger.info(f"✅ Sent to Telegram channel: {post_data.get('channel_name', '')}")
