@@ -44,7 +44,7 @@ FACEBOOK_POSTING_ENABLED = os.getenv("FACEBOOK_POSTING_ENABLED", "true").lower()
 FACEBOOK_API_VERSION = "v21.0"
 
 # --- Dashboard ---
-DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "8080"))
+DASHBOARD_PORT = int(os.getenv("PORT", os.getenv("DASHBOARD_PORT", "8080")))
 DASHBOARD_SECRET_KEY = os.getenv("DASHBOARD_SECRET_KEY", "auto-news-scraper-secret")
 
 
