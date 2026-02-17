@@ -112,12 +112,21 @@ async def send_to_channel(post_data: dict) -> bool:
         for attempt in range(max_retries):
             try:
                 if media_path and Path(media_path).exists():
+                    # Telegram caption limit: 1024 chars for media
+                    caption = message_text
+                    send_followup = False
+
+                    if len(message_text) > 1024:
+                        # Truncate caption and send full text as follow-up
+                        caption = message_text[:1020] + "..."
+                        send_followup = True
+
                     if media_type == "photo":
                         with open(media_path, "rb") as photo:
                             await bot.send_photo(
                                 chat_id=channel_id,
                                 photo=photo,
-                                caption=message_text,
+                                caption=caption,
                                 parse_mode=ParseMode.HTML,
                             )
                         sent = True
@@ -126,7 +135,7 @@ async def send_to_channel(post_data: dict) -> bool:
                             await bot.send_video(
                                 chat_id=channel_id,
                                 video=video,
-                                caption=message_text,
+                                caption=caption,
                                 parse_mode=ParseMode.HTML,
                                 supports_streaming=True,
                             )
@@ -137,12 +146,21 @@ async def send_to_channel(post_data: dict) -> bool:
                             await bot.send_document(
                                 chat_id=channel_id,
                                 document=doc,
-                                caption=message_text,
+                                caption=caption,
                                 parse_mode=ParseMode.HTML,
                             )
                         sent = True
+
+                    # Send full text as follow-up if caption was truncated
+                    if sent and send_followup:
+                        await bot.send_message(
+                            chat_id=channel_id,
+                            text=message_text,
+                            parse_mode=ParseMode.HTML,
+                            disable_web_page_preview=True,
+                        )
                 else:
-                    # Text-only message
+                    # Text-only message (4096 char limit)
                     await bot.send_message(
                         chat_id=channel_id,
                         text=message_text,
