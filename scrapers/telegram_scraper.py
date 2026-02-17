@@ -52,7 +52,23 @@ class TelegramScraper:
             api_hash
         )
 
-        await self.client.start(phone=config.TELEGRAM_PHONE)
+        await self.client.connect()
+
+        # Check if we have a valid session (already authorized)
+        if not await self.client.is_user_authorized():
+            # In non-interactive environments (Railway), we can't prompt for code
+            # Try starting with phone — this works locally but blocks on Railway
+            import sys
+            if sys.stdin.isatty():
+                # Interactive terminal — allow code input
+                await self.client.start(phone=config.TELEGRAM_PHONE)
+            else:
+                # Non-interactive (Railway) — session must already be authorized
+                logger.error("❌ Telegram session not authorized. Please authenticate locally first and deploy the session file.")
+                await log_activity("error", "Telegram session not authorized — authenticate locally first", "telegram")
+                await self.client.disconnect()
+                return
+
         self.running = True
 
         logger.info("✅ Telegram user client connected")
