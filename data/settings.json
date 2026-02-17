@@ -1,0 +1,13 @@
+{
+  "telegram_sources": [],
+  "x_accounts": [
+    "elonmusk"
+  ],
+  "x_hashtags": [
+    "breaking"
+  ],
+  "filter_mode": "all",
+  "filter_include_keywords": [],
+  "filter_exclude_keywords": [],
+  "facebook_posting_enabled": true
+}
