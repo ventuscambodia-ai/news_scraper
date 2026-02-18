@@ -100,6 +100,7 @@ def _upload_to_temp_host(file_path: str) -> str:
             resp = http_requests.post(
                 "https://0x0.st",
                 files={"file": f},
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
                 timeout=120,
             )
         if resp.status_code == 200:
