@@ -237,7 +237,7 @@ DASHBOARD_HTML = """
         .stat-card.total::before { background: linear-gradient(90deg, var(--accent), var(--telegram)); }
         .stat-card.today::before { background: var(--success); }
         .stat-card.tg::before { background: var(--telegram); }
-        .stat-card.x-card::before { background: var(--text-secondary); }
+        .stat-card.tg::before { background: var(--telegram); }
 
         .stat-card:hover {
             transform: translateY(-2px);
@@ -263,7 +263,7 @@ DASHBOARD_HTML = """
         .stat-card.total .stat-value { color: var(--accent); }
         .stat-card.today .stat-value { color: var(--success); }
         .stat-card.tg .stat-value { color: var(--telegram); }
-        .stat-card.x-card .stat-value { color: var(--text-primary); }
+        .stat-card.tg .stat-value { color: var(--telegram); }
 
         /* ── Tabs ────────────────────────────────────────── */
         .tabs {
@@ -788,10 +788,7 @@ DASHBOARD_HTML = """
                 <div class="stat-label">Telegram</div>
                 <div class="stat-value" id="stat-source-tg">0</div>
             </div>
-            <div class="stat-card x-card">
-                <div class="stat-label">X (Twitter)</div>
-                <div class="stat-value" id="stat-source-x">0</div>
-            </div>
+
             <div class="stat-card fb">
                 <div class="stat-label">Facebook</div>
                 <div class="stat-value" id="stat-source-fb">0</div>
@@ -823,33 +820,7 @@ DASHBOARD_HTML = """
                 <div class="tags" id="tg-channel-tags"></div>
             </div>
 
-            <!-- X Accounts -->
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-icon x">𝕏</div>
-                    <div class="card-title">X Accounts</div>
-                </div>
-                <p class="card-subtitle">Usernames without @ — polls recent tweets periodically</p>
-                <div class="input-row">
-                    <input type="text" id="x-account-input" placeholder="e.g. elonmusk">
-                    <button class="btn btn-primary btn-sm" onclick="addItem('x_accounts', 'x-account-input')">Add</button>
-                </div>
-                <div class="tags" id="x-account-tags"></div>
-            </div>
 
-            <!-- X Hashtags -->
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-icon x">#</div>
-                    <div class="card-title">X Hashtags</div>
-                </div>
-                <p class="card-subtitle">Hashtags without # — monitors for matching tweets</p>
-                <div class="input-row">
-                    <input type="text" id="x-hashtag-input" placeholder="e.g. breaking">
-                    <button class="btn btn-primary btn-sm" onclick="addItem('x_hashtags', 'x-hashtag-input')">Add</button>
-                </div>
-                <div class="tags" id="x-hashtag-tags"></div>
-            </div>
 
             <div class="setting-group">
                 <h3>Facebook Pages (Source)</h3>
@@ -1003,24 +974,7 @@ DASHBOARD_HTML = """
                     </div>
                 </div>
 
-                <!-- X API -->
-                <div class="accordion" id="acc-x">
-                    <div class="accordion-header" onclick="toggleAccordion('acc-x')">
-                        <div class="accordion-header-left">
-                            <div class="accordion-icon" style="background:var(--x-dim);">𝕏</div>
-                            <span class="accordion-title">X (Twitter) API</span>
-                            <span class="accordion-badge" id="badge-x">—</span>
-                        </div>
-                        <span class="accordion-chevron">▼</span>
-                    </div>
-                    <div class="accordion-body">
-                        <div class="api-hint" style="margin-bottom:0.5rem;">Get from <a href="https://developer.x.com" target="_blank">developer.x.com</a> → Projects & Apps</div>
-                        <div class="api-field">
-                            <label>Bearer Token</label>
-                            <input type="password" id="api-x-bearer" placeholder="e.g. AAAAAAAAA...">
-                        </div>
-                    </div>
-                </div>
+
 
                 <!-- Facebook -->
                 <div class="accordion" id="acc-fb">
@@ -1159,7 +1113,7 @@ DASHBOARD_HTML = """
             // Source stats
             const sources = d.by_source || {};
             document.getElementById('stat-source-tg').textContent = sources.telegram || 0;
-            document.getElementById('stat-source-x').textContent = sources.x || 0;
+
             document.getElementById('stat-source-fb').textContent = sources.facebook || 0;
 
             // Destination stats
@@ -1207,8 +1161,7 @@ DASHBOARD_HTML = """
         // ─── Render ─────────────────────────────────────
         function renderSettings() {
             renderTags('tg-channel-tags', currentSettings.telegram_sources || [], 'telegram_sources');
-            renderTags('x-account-tags', currentSettings.x_accounts || [], 'x_accounts');
-            renderTags('x-hashtag-tags', currentSettings.x_hashtags || [], 'x_hashtags');
+
             renderTags('fb-source-tags', currentSettings.facebook_sources || [], 'facebook_sources');
             renderTags('include-keyword-tags', currentSettings.filter_include_keywords || [], 'filter_include_keywords');
             renderTags('exclude-keyword-tags', currentSettings.filter_exclude_keywords || [], 'filter_exclude_keywords');
@@ -1302,8 +1255,7 @@ DASHBOARD_HTML = """
             if (e.key !== 'Enter') return;
             const t = e.target;
             if (t.id === 'tg-channel-input') addItem('telegram_sources', 'tg-channel-input');
-            else if (t.id === 'x-account-input') addItem('x_accounts', 'x-account-input');
-            else if (t.id === 'x-hashtag-input') addItem('x_hashtags', 'x-hashtag-input');
+
             else if (t.id === 'fb-source-input') addItem('facebook_sources', 'fb-source-input');
             else if (t.id === 'include-keyword-input') addItem('filter_include_keywords', 'include-keyword-input');
             else if (t.id === 'exclude-keyword-input') addItem('filter_exclude_keywords', 'exclude-keyword-input');
@@ -1317,7 +1269,7 @@ DASHBOARD_HTML = """
                 const map = {
                     TELEGRAM_API_ID: 'api-tg-api-id', TELEGRAM_API_HASH: 'api-tg-api-hash',
                     TELEGRAM_PHONE: 'api-tg-phone', TELEGRAM_BOT_TOKEN: 'api-tg-bot-token',
-                    TELEGRAM_CHANNEL_ID: 'api-tg-channel-id', X_BEARER_TOKEN: 'api-x-bearer',
+                    TELEGRAM_CHANNEL_ID: 'api-tg-channel-id',
                     FACEBOOK_PAGE_ACCESS_TOKEN: 'api-fb-token', FACEBOOK_PAGE_ID: 'api-fb-page-id',
                     INSTAGRAM_ACCOUNT_ID: 'api-ig-account-id', INSTAGRAM_ACCESS_TOKEN: 'api-ig-token'
                 };
@@ -1334,7 +1286,7 @@ DASHBOARD_HTML = """
             // Status overview
             const labels = { 
                 telegram_user: '📡 Telegram User', telegram_bot: '🤖 Telegram Bot', 
-                x_api: '𝕏  X API', facebook: '📘 Facebook', instagram: '📸 Instagram' 
+                facebook: '📘 Facebook', instagram: '📸 Instagram' 
             };
             document.getElementById('api-status').innerHTML = Object.entries(d).map(([k, ok]) => `
                 <div class="setting-row">
@@ -1348,7 +1300,7 @@ DASHBOARD_HTML = """
             // Accordion badges
             const badgeMap = { 
                 telegram_user: 'badge-tg-user', telegram_bot: 'badge-tg-bot', 
-                x_api: 'badge-x', facebook: 'badge-fb', instagram: 'badge-ig' 
+                facebook: 'badge-fb', instagram: 'badge-ig' 
             };
             for (const [k, id] of Object.entries(badgeMap)) {
                 const el = document.getElementById(id);
@@ -1553,7 +1505,7 @@ def save_credentials():
                 "TELEGRAM_PHONE": "Telegram Phone",
                 "TELEGRAM_BOT_TOKEN": "Telegram Bot Token",
                 "TELEGRAM_CHANNEL_ID": "Telegram Channel ID",
-                "X_BEARER_TOKEN": "X Bearer Token",
+
                 "FACEBOOK_PAGE_ACCESS_TOKEN": "Facebook Page Token",
                 "FACEBOOK_PAGE_ID": "Facebook Page ID",
                 "INSTAGRAM_ACCOUNT_ID": "Instagram Account ID",

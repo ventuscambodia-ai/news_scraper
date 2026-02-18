@@ -33,9 +33,7 @@ TELEGRAM_SESSION_NAME = "news_scraper_session"
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "")
 
-# --- X (Twitter) ---
-X_BEARER_TOKEN = os.getenv("X_BEARER_TOKEN", "")
-X_POLL_INTERVAL = int(os.getenv("X_POLL_INTERVAL", "60"))  # seconds
+
 
 # --- Facebook ---
 FACEBOOK_PAGE_ACCESS_TOKEN = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN", "")
@@ -57,8 +55,7 @@ DASHBOARD_SECRET_KEY = os.getenv("DASHBOARD_SECRET_KEY", "auto-news-scraper-secr
 # --- Dynamic Settings (persisted to JSON) ---
 DEFAULT_SETTINGS = {
     "telegram_sources": [],       # List of Telegram channel usernames/IDs to monitor
-    "x_accounts": [],             # List of X usernames to monitor (without @)
-    "x_hashtags": [],             # List of hashtags to monitor (without #)
+
     "facebook_sources": [],       # List of Facebook page IDs to monitor
     "filter_mode": "all",         # "all" = forward everything (except excludes), "include" = only matching keywords
     "filter_include_keywords": [],  # Keywords to include (used in "include" mode)
@@ -106,7 +103,6 @@ def is_configured() -> dict:
     return {
         "telegram_user": bool(TELEGRAM_API_ID and TELEGRAM_API_HASH),
         "telegram_bot": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID),
-        "x_api": bool(X_BEARER_TOKEN),
         "facebook": bool(FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_PAGE_ID),
         "instagram": bool(INSTAGRAM_ACCOUNT_ID and INSTAGRAM_ACCESS_TOKEN),
     }
@@ -127,7 +123,7 @@ def reload_env():
     TELEGRAM_PHONE = os.getenv("TELEGRAM_PHONE", "")
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "")
-    X_BEARER_TOKEN = os.getenv("X_BEARER_TOKEN", "")
+
     FACEBOOK_PAGE_ACCESS_TOKEN = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN", "")
     FACEBOOK_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID", "")
     FACEBOOK_POSTING_ENABLED = os.getenv("FACEBOOK_POSTING_ENABLED", "true").lower() == "true"

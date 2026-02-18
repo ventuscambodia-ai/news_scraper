@@ -12,7 +12,7 @@ from datetime import datetime
 import config
 from database import init_db, log_activity
 from scrapers.telegram_scraper import TelegramScraper
-from scrapers.x_scraper import XScraper
+
 from scrapers.facebook_scraper import FacebookScraper
 from media.media_handler import cleanup_all_temp
 
@@ -43,7 +43,6 @@ def setup_logging():
 
     # Suppress noisy third-party loggers
     logging.getLogger("telethon").setLevel(logging.WARNING)
-    logging.getLogger("tweepy").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("aiohttp").setLevel(logging.WARNING)
 
@@ -60,7 +59,7 @@ async def main():
     print()
     print("╔══════════════════════════════════════════════════════════╗")
     print("║         📰 AUTO NEWS SCRAPER v2.0                       ║")
-    print("║    Telegram + X + Facebook → TG + FB + Instagram        ║")
+    print("║    Telegram + Facebook → TG + FB + Instagram        ║")
     print("╚══════════════════════════════════════════════════════════╝")
     print()
 
@@ -82,8 +81,7 @@ async def main():
     settings = config.load_settings()
     logger.info(f"📋 Sources configured:")
     logger.info(f"   Telegram channels: {len(settings.get('telegram_sources', []))}")
-    logger.info(f"   X accounts: {len(settings.get('x_accounts', []))}")
-    logger.info(f"   X hashtags: {len(settings.get('x_hashtags', []))}")
+
     logger.info(f"   Facebook pages: {len(settings.get('facebook_sources', []))}")
     logger.info(f"   Filter mode: {settings.get('filter_mode', 'all')}")
     logger.info(f"   Facebook posting: {'enabled' if settings.get('facebook_posting_enabled') else 'disabled'}")
@@ -93,7 +91,7 @@ async def main():
 
     # Create scraper instances
     telegram_scraper = TelegramScraper()
-    x_scraper = XScraper()
+
     facebook_scraper = FacebookScraper()
 
     # Start dashboard in a separate thread (always runs)
@@ -126,11 +124,7 @@ async def main():
     else:
         logger.warning("⏭️  Skipping Telegram scraper (not configured)")
 
-    if api_status["x_api"]:
-        tasks.append(asyncio.create_task(safe_scraper("X", x_scraper.start())))
-        logger.info("🚀 X scraper starting...")
-    else:
-        logger.warning("⏭️  Skipping X scraper (not configured)")
+
 
     if api_status["facebook"]:
         tasks.append(asyncio.create_task(safe_scraper("Facebook", facebook_scraper.start())))
