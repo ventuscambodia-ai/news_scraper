@@ -159,12 +159,12 @@ async def send_to_instagram(post_data: dict) -> bool:
         if config.INSTAGRAM_POSTING_ENABLED:
             logger.warning("⚠️  Instagram Enabled but missing Account ID or Token. Check Railway variables!")
         else:
-            logger.debug("⏭️  Instagram not configured, skipping")
+            logger.warning("⏭️  Instagram configured to SKIP (Env Var INSTAGRAM_POSTING_ENABLED=False)")
         return False
 
     settings = config.load_settings()
     if not settings.get("instagram_posting_enabled", False):
-        logger.debug("⏭️  Instagram posting disabled")
+        logger.warning("⏭️  Instagram posting disabled in Settings (Check Dashboard!)")
         return False
 
     media_names = post_data.get("media_paths", [])
