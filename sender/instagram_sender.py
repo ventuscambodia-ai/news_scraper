@@ -128,9 +128,29 @@ def _upload_to_temp_host(file_path: str) -> str:
             logger.debug(f"📤 Uploaded to temp host (uguu.se): {url}")
             return url
         else:
-            logger.error(f"❌ uguu.se upload failed: {resp.status_code} - {resp.text}")
+            logger.warning(f"⚠️  uguu.se upload failed: {resp.status_code} - {resp.text}")
     except Exception as e:
-        logger.error(f"❌ Fallback upload error: {e}")
+        logger.warning(f"⚠️  uguu.se upload error: {e}")
+
+    # Fallback to catbox.moe (Last Resort)
+    try:
+        logger.info("🔄 Retrying upload with catbox.moe...")
+        with open(file_path, "rb") as f:
+            resp = http_requests.post(
+                "https://catbox.moe/user/api.php",
+                data={"reqtype": "fileupload"},
+                files={"fileToUpload": f},
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+                timeout=120,
+            )
+        if resp.status_code == 200:
+            url = resp.text.strip()
+            logger.debug(f"📤 Uploaded to temp host (catbox.moe): {url}")
+            return url
+        else:
+            logger.error(f"❌ catbox.moe upload failed: {resp.status_code} - {resp.text}")
+    except Exception as e:
+        logger.error(f"❌ catbox.moe upload error: {e}")
 
     return None
 
