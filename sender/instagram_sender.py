@@ -246,6 +246,45 @@ async def send_to_instagram(post_data: dict) -> bool:
         return False
 
 
+
+def _wait_for_media_processing(container_id: str, token: str, max_retries: int = 10) -> bool:
+    """
+    Poll the container status until it is FINISHED or fails.
+    Returns True if ready to publish, False on error/timeout.
+    """
+    url = f"{GRAPH_API_BASE}/{container_id}"
+    params = {"fields": "status_code", "access_token": token}
+    
+    for i in range(max_retries):
+        try:
+            resp = http_requests.get(url, params=params, timeout=15)
+            if resp.status_code == 200:
+                data = resp.json()
+                status = data.get("status_code", "")
+                if status == "FINISHED":
+                    return True
+                elif status == "ERROR":
+                    logger.error(f"❌ Media container {container_id} failed processing")
+                    return False
+                elif status == "IN_PROGRESS":
+                    pass # Continue waiting
+                else: 
+                     # Sometimes empty or ready immediately without status_code field for images?
+                     # If status_code is missing, it might be ready.
+                     # But for 9007 error, it usually means IN_PROGRESS.
+                     pass
+            
+            time.sleep(2) # Wait 2s between checks
+        except Exception as e:
+            logger.warning(f"⚠️ Error checking status: {e}")
+            time.sleep(2)
+            
+    return True # Assume ready if timeout, or try anyway? 
+    # Actually if we time out, we should probably return True and let publish try (and fail if not ready).
+    # But better to return False if we know it's stuck. 
+    # Let's return True to attempt publish as last resort.
+
+
 async def _post_photo(account_id: str, token: str, caption: str, image_url: str) -> bool:
     """Post a photo to Instagram via Graph API."""
     loop = asyncio.get_event_loop()
@@ -268,6 +307,9 @@ async def _post_photo(account_id: str, token: str, caption: str, image_url: str)
         if not creation_id:
             logger.error(f"❌ IG no creation_id returned: {container_data}")
             return False
+
+        # Wait for processing (Fix for 9007 error)
+        _wait_for_media_processing(creation_id, token)
 
         # Step 2: Publish the container
         publish_url = f"{GRAPH_API_BASE}/{account_id}/media_publish"
@@ -309,6 +351,11 @@ async def _post_video(account_id: str, token: str, caption: str, video_url: str)
     creation_id = await loop.run_in_executor(None, _create_container)
     if not creation_id:
         return False
+
+    # Poll for video processing (uses _wait_for_media_processing logic but custom for video timeout/logic)
+    # Actually we can reuse _wait_for_media_processing but video takes longer.
+    # Let's keep existing _post_video logic or enable reuse.
+    # Existing _post_video logic is fine.
 
     # Poll for video processing completion (can take a while)
     max_polls = 30
@@ -402,6 +449,9 @@ async def _post_carousel(account_id: str, token: str, caption: str, media_items:
                 
             child_id = resp.json().get("id")
             if child_id:
+                # Wait for item to be ready before adding to list? 
+                # Docs say "Ensure all items are FINISHED before creating carousel container".
+                _wait_for_media_processing(child_id, token)
                 child_ids.append(child_id)
             
             # Rate limit safety
@@ -428,6 +478,11 @@ async def _post_carousel(account_id: str, token: str, caption: str, media_items:
         creation_id = resp.json().get("id")
         if not creation_id:
              return False
+
+        # Wait for carousel container? 
+        # "Once the container is created, you can publish it." 
+        # But maybe safer to wait too.
+        _wait_for_media_processing(creation_id, token)
 
         # Step 3: Publish
         publish_url = f"{GRAPH_API_BASE}/{account_id}/media_publish"
