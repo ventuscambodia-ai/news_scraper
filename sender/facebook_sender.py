@@ -7,6 +7,7 @@ import asyncio
 import logging
 from pathlib import Path
 
+import json
 import requests
 
 import config
@@ -93,7 +94,14 @@ async def send_to_facebook(post_data: dict) -> bool:
 
         result = False
 
-        if media_path and Path(media_path).exists():
+        # Check for Multi-Photo (Album)
+        media_paths = post_data.get("media_paths", [])
+        photos = [m for m in media_paths if m.get("type") == "photo"]
+        
+        if len(photos) > 1:
+            logger.info(f"📸 Preparing Facebook Multi-Photo post with {len(photos)} items")
+            result = await _post_multi_photo(page_id, page_token, message_text, photos)
+        elif media_path and Path(media_path).exists():
             if media_type == "photo":
                 result = await _post_photo(page_id, page_token, message_text, media_path)
             elif media_type == "video":
@@ -185,3 +193,65 @@ async def _post_video(page_id: str, token: str, message: str, video_path: str) -
     else:
         logger.error(f"❌ Facebook video post failed: {response.status_code} - {response.text}")
         return False
+
+
+async def _post_multi_photo(page_id: str, token: str, message: str, photos: list) -> bool:
+    """
+    Post multiple photos to Facebook as a single feed post.
+    Args:
+        photos: List of dicts {'path': str, 'type': 'photo'}
+    """
+    loop = asyncio.get_event_loop()
+
+    def _execute_multi_photo():
+        media_fbids = []
+
+        # Step 1: Upload each photo as unpublished
+        for item in photos:
+            path = item.get("path")
+            if not path or not Path(path).exists():
+                continue
+
+            url = f"{GRAPH_API_BASE}/{page_id}/photos"
+            try:
+                with open(path, "rb") as f:
+                    resp = requests.post(
+                        url,
+                        data={"published": "false", "access_token": token},
+                        files={"source": f},
+                        timeout=60
+                    )
+                
+                if resp.status_code == 200:
+                    fbid = resp.json().get("id")
+                    if fbid:
+                        media_fbids.append({"media_fbid": fbid})
+                else:
+                    logger.warning(f"⚠️ Failed to upload photo chunk: {resp.text}")
+            except Exception as e:
+                logger.error(f"❌ Photo upload error: {e}")
+
+        if not media_fbids:
+            logger.error("❌ No photos uploaded successfully for multi-photo post")
+            return False
+
+        # Step 2: Publish feed post with attached media
+        url = f"{GRAPH_API_BASE}/{page_id}/feed"
+        payload = {
+            "message": message,
+            "attached_media": json.dumps(media_fbids),
+            "access_token": token
+        }
+
+        resp = requests.post(url, data=payload, timeout=60)
+
+        if resp.status_code == 200:
+            post_id = resp.json().get("id")
+            logger.info(f"✅ Posted Multi-Photo to Facebook: {post_id}")
+            return True
+        else:
+            logger.error(f"❌ Facebook multi-photo post failed: {resp.status_code} - {resp.text}")
+            return False
+
+    return await loop.run_in_executor(None, _execute_multi_photo)
+

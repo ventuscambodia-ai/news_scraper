@@ -134,7 +134,11 @@ async def send_to_instagram(post_data: dict) -> bool:
     access_token = config.INSTAGRAM_ACCESS_TOKEN
 
     if not account_id or not access_token:
-        logger.debug("⏭️  Instagram not configured, skipping")
+        # Only warn if explicitly enabled but missing credentials
+        if config.INSTAGRAM_POSTING_ENABLED:
+            logger.warning("⚠️  Instagram Enabled but missing Account ID or Token. Check Railway variables!")
+        else:
+            logger.debug("⏭️  Instagram not configured, skipping")
         return False
 
     settings = config.load_settings()
@@ -142,12 +146,24 @@ async def send_to_instagram(post_data: dict) -> bool:
         logger.debug("⏭️  Instagram posting disabled")
         return False
 
+    media_names = post_data.get("media_paths", [])
+    
+    # Check for Carousel (Album)
+    if media_names and len(media_names) > 1:
+        logger.info(f"📸 Preparing Instagram Carousel with {len(media_names)} items")
+        try:
+            caption = _format_instagram_caption(post_data)
+            return await _post_carousel(account_id, access_token, caption, media_names)
+        except Exception as e:
+             logger.error(f"❌ Instagram Carousel error: {e}", exc_info=True)
+             return False
+
     media_path = post_data.get("media_path")
     media_type = post_data.get("media_type")
 
     # Instagram requires media — skip text-only posts
     if not media_path or not Path(media_path).exists():
-        logger.debug("⏭️  No media for Instagram (IG requires photo/video), skipping")
+        logger.info("ℹ️  Skipped Instagram: Post has no media (IG requires photo/video)")
         return False
 
     # Rate limit check
@@ -296,3 +312,96 @@ async def _post_video(account_id: str, token: str, caption: str, video_url: str)
 
     logger.error("❌ Instagram video processing timed out")
     return False
+
+
+async def _post_carousel(account_id: str, token: str, caption: str, media_items: list) -> bool:
+    """
+    Post a Carousel (Sidecar) to Instagram.
+    Args:
+        media_items: List of dicts {'path': str, 'type': str}
+    """
+    loop = asyncio.get_event_loop()
+
+    def _execute_carousel():
+        # Step 1: Upload all media and create Item Containers
+        child_ids = []
+        
+        for item in media_items:
+            path = item.get("path")
+            mtype = item.get("type", "photo")
+            
+            if not path or not Path(path).exists():
+                continue
+
+            # Upload to temp host
+            media_url = _upload_to_temp_host(path)
+            if not media_url:
+                continue
+
+            # Create Item Container
+            url = f"{GRAPH_API_BASE}/{account_id}/media"
+            payload = {
+                "access_token": token,
+                "is_carousel_item": "true",
+            }
+            
+            if mtype == "video":
+                payload["video_url"] = media_url
+                payload["media_type"] = "VIDEO" # Video in carousel
+            else:
+                payload["image_url"] = media_url
+                # image doesn't need media_type param for item container if image_url is present, 
+                # but 'IMAGE' is default.
+
+            resp = http_requests.post(url, data=payload, timeout=60)
+            
+            if resp.status_code != 200:
+                logger.error(f"❌ IG carousel item failed: {resp.text}")
+                continue
+                
+            child_id = resp.json().get("id")
+            if child_id:
+                child_ids.append(child_id)
+            
+            # Rate limit safety
+            time.sleep(2)
+
+        if not child_ids:
+            logger.error("❌ No valid items created for carousel")
+            return False
+
+        # Step 2: Create Carousel Container
+        carousel_url = f"{GRAPH_API_BASE}/{account_id}/media"
+        carousel_payload = {
+            "media_type": "CAROUSEL",
+            "caption": caption,
+            "children": ",".join(child_ids), # Comma-separated IDs
+            "access_token": token,
+        }
+        
+        resp = http_requests.post(carousel_url, data=carousel_payload, timeout=60)
+        if resp.status_code != 200:
+             logger.error(f"❌ IG carousel container failed: {resp.text}")
+             return False
+
+        creation_id = resp.json().get("id")
+        if not creation_id:
+             return False
+
+        # Step 3: Publish
+        publish_url = f"{GRAPH_API_BASE}/{account_id}/media_publish"
+        pub_resp = http_requests.post(publish_url, data={
+            "creation_id": creation_id,
+            "access_token": token,
+        }, timeout=60)
+
+        if pub_resp.status_code == 200:
+            post_id = pub_resp.json().get("id")
+            logger.info(f"✅ Posted Carousel to Instagram: {post_id}")
+            return True
+        else:
+            logger.error(f"❌ IG carousel publish failed: {pub_resp.text}")
+            return False
+
+    return await loop.run_in_executor(None, _execute_carousel)
+
