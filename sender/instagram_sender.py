@@ -95,6 +95,7 @@ def _upload_to_temp_host(file_path: str) -> str:
     Instagram Graph API requires publicly accessible media URLs.
     Uses 0x0.st (supports images and videos, no auth required).
     """
+    # Try 0x0.st first
     try:
         with open(file_path, "rb") as f:
             resp = http_requests.post(
@@ -105,14 +106,33 @@ def _upload_to_temp_host(file_path: str) -> str:
             )
         if resp.status_code == 200:
             url = resp.text.strip()
-            logger.debug(f"📤 Uploaded to temp host: {url}")
+            logger.debug(f"📤 Uploaded to temp host (0x0.st): {url}")
             return url
         else:
-            logger.error(f"❌ Temp upload failed: {resp.status_code} - {resp.text}")
-            return None
+            logger.warning(f"⚠️  0x0.st upload failed: {resp.status_code} - {resp.text}")
     except Exception as e:
-        logger.error(f"❌ Temp upload error: {e}")
-        return None
+        logger.warning(f"⚠️  0x0.st upload error: {e}")
+
+    # Fallback to uguu.se
+    try:
+        logger.info("🔄 Retrying upload with uguu.se...")
+        with open(file_path, "rb") as f:
+            resp = http_requests.post(
+                "https://uguu.se/upload.php?output=text",
+                files={"files[]": f},
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+                timeout=120,
+            )
+        if resp.status_code == 200:
+            url = resp.text.strip()
+            logger.debug(f"📤 Uploaded to temp host (uguu.se): {url}")
+            return url
+        else:
+            logger.error(f"❌ uguu.se upload failed: {resp.status_code} - {resp.text}")
+    except Exception as e:
+        logger.error(f"❌ Fallback upload error: {e}")
+
+    return None
 
 
 async def send_to_instagram(post_data: dict) -> bool:
