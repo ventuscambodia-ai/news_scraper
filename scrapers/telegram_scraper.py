@@ -19,6 +19,7 @@ from filters.content_filter import should_forward
 from media.media_handler import download_telegram_media, cleanup_media
 from sender.telegram_sender import send_to_channel
 from sender.facebook_sender import send_to_facebook
+from sender.instagram_sender import send_to_instagram
 
 logger = logging.getLogger("scraper.telegram")
 
@@ -167,6 +168,11 @@ class TelegramScraper:
         if settings.get("facebook_posting_enabled", False):
             fb_sent = await send_to_facebook(post_data)
 
+        # Send to Instagram
+        ig_sent = False
+        if settings.get("instagram_posting_enabled", False):
+            ig_sent = await send_to_instagram(post_data)
+
         # Cleanup media file after ALL senders have finished
         if media_path:
             cleanup_media(media_path)
@@ -175,12 +181,12 @@ class TelegramScraper:
         await mark_sent(
             "telegram", source_id, text,
             title=text[:100] if text else channel_name,
-            telegram=tg_sent, facebook=fb_sent
+            telegram=tg_sent, facebook=fb_sent, instagram=ig_sent
         )
 
         await log_activity(
             "info",
-            f"Forwarded from [{channel_name}] → TG:{'✅' if tg_sent else '❌'} FB:{'✅' if fb_sent else '⏭️'}",
+            f"Forwarded from [{channel_name}] → TG:{'✅' if tg_sent else '❌'} FB:{'✅' if fb_sent else '⏭️'} IG:{'✅' if ig_sent else '⏭️'}",
             "telegram"
         )
 
@@ -289,6 +295,11 @@ class TelegramScraper:
             if settings.get("facebook_posting_enabled", False):
                 fb_sent = await send_to_facebook(post_data)
 
+            # Send to Instagram (uses first image)
+            ig_sent = False
+            if settings.get("instagram_posting_enabled", False):
+                ig_sent = await send_to_instagram(post_data)
+
             # Cleanup ALL media files
             for mp in media_paths:
                 path = mp.get("path", "") if isinstance(mp, dict) else mp
@@ -299,12 +310,12 @@ class TelegramScraper:
             await mark_sent(
                 "telegram", source_id, text,
                 title=text[:100] if text else channel_name,
-                telegram=tg_sent, facebook=fb_sent
+                telegram=tg_sent, facebook=fb_sent, instagram=ig_sent
             )
 
             await log_activity(
                 "info",
-                f"Forwarded album ({len(media_paths)} media) from [{channel_name}] → TG:{'✅' if tg_sent else '❌'} FB:{'✅' if fb_sent else '⏭️'}",
+                f"Forwarded album ({len(media_paths)} media) from [{channel_name}] → TG:{'✅' if tg_sent else '❌'} FB:{'✅' if fb_sent else '⏭️'} IG:{'✅' if ig_sent else '⏭️'}",
                 "telegram"
             )
 

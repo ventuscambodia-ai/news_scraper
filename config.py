@@ -42,6 +42,12 @@ FACEBOOK_PAGE_ACCESS_TOKEN = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN", "")
 FACEBOOK_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID", "")
 FACEBOOK_POSTING_ENABLED = os.getenv("FACEBOOK_POSTING_ENABLED", "true").lower() == "true"
 FACEBOOK_API_VERSION = "v21.0"
+FACEBOOK_POLL_INTERVAL = int(os.getenv("FACEBOOK_POLL_INTERVAL", "120"))  # seconds
+
+# --- Instagram ---
+INSTAGRAM_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID", "")
+INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+INSTAGRAM_POSTING_ENABLED = os.getenv("INSTAGRAM_POSTING_ENABLED", "true").lower() == "true"
 
 # --- Dashboard ---
 DASHBOARD_PORT = int(os.getenv("PORT", os.getenv("DASHBOARD_PORT", "8080")))
@@ -53,10 +59,12 @@ DEFAULT_SETTINGS = {
     "telegram_sources": [],       # List of Telegram channel usernames/IDs to monitor
     "x_accounts": [],             # List of X usernames to monitor (without @)
     "x_hashtags": [],             # List of hashtags to monitor (without #)
+    "facebook_sources": [],       # List of Facebook page IDs to monitor
     "filter_mode": "all",         # "all" = forward everything (except excludes), "include" = only matching keywords
     "filter_include_keywords": [],  # Keywords to include (used in "include" mode)
     "filter_exclude_keywords": [],  # Keywords to exclude (always active)
     "facebook_posting_enabled": FACEBOOK_POSTING_ENABLED,
+    "instagram_posting_enabled": INSTAGRAM_POSTING_ENABLED,
 }
 
 
@@ -100,6 +108,7 @@ def is_configured() -> dict:
         "telegram_bot": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID),
         "x_api": bool(X_BEARER_TOKEN),
         "facebook": bool(FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_PAGE_ID),
+        "instagram": bool(INSTAGRAM_ACCOUNT_ID and INSTAGRAM_ACCESS_TOKEN),
     }
 
 
@@ -109,6 +118,7 @@ def reload_env():
     global TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID
     global X_BEARER_TOKEN
     global FACEBOOK_PAGE_ACCESS_TOKEN, FACEBOOK_PAGE_ID, FACEBOOK_POSTING_ENABLED
+    global INSTAGRAM_ACCOUNT_ID, INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_POSTING_ENABLED
 
     load_dotenv(override=True)
 
@@ -121,3 +131,6 @@ def reload_env():
     FACEBOOK_PAGE_ACCESS_TOKEN = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN", "")
     FACEBOOK_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID", "")
     FACEBOOK_POSTING_ENABLED = os.getenv("FACEBOOK_POSTING_ENABLED", "true").lower() == "true"
+    INSTAGRAM_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID", "")
+    INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+    INSTAGRAM_POSTING_ENABLED = os.getenv("INSTAGRAM_POSTING_ENABLED", "true").lower() == "true"

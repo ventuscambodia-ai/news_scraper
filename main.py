@@ -13,6 +13,7 @@ import config
 from database import init_db, log_activity
 from scrapers.telegram_scraper import TelegramScraper
 from scrapers.x_scraper import XScraper
+from scrapers.facebook_scraper import FacebookScraper
 from media.media_handler import cleanup_all_temp
 
 
@@ -57,10 +58,10 @@ async def main():
 
     # Banner
     print()
-    print("╔══════════════════════════════════════════════════╗")
-    print("║         📰 AUTO NEWS SCRAPER v1.0               ║")
-    print("║    Telegram + X → Telegram Channel + Facebook   ║")
-    print("╚══════════════════════════════════════════════════╝")
+    print("╔══════════════════════════════════════════════════════════╗")
+    print("║         📰 AUTO NEWS SCRAPER v2.0                       ║")
+    print("║    Telegram + X + Facebook → TG + FB + Instagram        ║")
+    print("╚══════════════════════════════════════════════════════════╝")
     print()
 
     # Initialize database
@@ -83,14 +84,17 @@ async def main():
     logger.info(f"   Telegram channels: {len(settings.get('telegram_sources', []))}")
     logger.info(f"   X accounts: {len(settings.get('x_accounts', []))}")
     logger.info(f"   X hashtags: {len(settings.get('x_hashtags', []))}")
+    logger.info(f"   Facebook pages: {len(settings.get('facebook_sources', []))}")
     logger.info(f"   Filter mode: {settings.get('filter_mode', 'all')}")
     logger.info(f"   Facebook posting: {'enabled' if settings.get('facebook_posting_enabled') else 'disabled'}")
+    logger.info(f"   Instagram posting: {'enabled' if settings.get('instagram_posting_enabled') else 'disabled'}")
 
     await log_activity("info", "Auto News Scraper started", "system")
 
     # Create scraper instances
     telegram_scraper = TelegramScraper()
     x_scraper = XScraper()
+    facebook_scraper = FacebookScraper()
 
     # Start dashboard in a separate thread (always runs)
     dashboard_task = None
@@ -127,6 +131,12 @@ async def main():
         logger.info("🚀 X scraper starting...")
     else:
         logger.warning("⏭️  Skipping X scraper (not configured)")
+
+    if api_status["facebook"]:
+        tasks.append(asyncio.create_task(safe_scraper("Facebook", facebook_scraper.start())))
+        logger.info("🚀 Facebook scraper starting...")
+    else:
+        logger.warning("⏭️  Skipping Facebook scraper (not configured)")
 
     if len(tasks) <= 1:
         logger.warning("⚠️  No scrapers configured! Use the dashboard to set up API keys.")

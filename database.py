@@ -25,6 +25,7 @@ async def init_db():
                 sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 sent_to_telegram BOOLEAN DEFAULT 0,
                 sent_to_facebook BOOLEAN DEFAULT 0,
+                sent_to_instagram BOOLEAN DEFAULT 0,
                 UNIQUE(source, source_id)
             )
         """)
@@ -45,6 +46,11 @@ async def init_db():
             CREATE INDEX IF NOT EXISTS idx_activity_log_timestamp 
             ON activity_log(timestamp DESC)
         """)
+        # Migration: add sent_to_instagram column if missing
+        try:
+            await db.execute("ALTER TABLE sent_posts ADD COLUMN sent_to_instagram BOOLEAN DEFAULT 0")
+        except Exception:
+            pass  # Column already exists
         await db.commit()
 
 
@@ -65,14 +71,15 @@ async def is_duplicate(source: str, source_id: str) -> bool:
 
 
 async def mark_sent(source: str, source_id: str, content: str,
-                    title: str = None, telegram: bool = False, facebook: bool = False):
+                    title: str = None, telegram: bool = False, facebook: bool = False,
+                    instagram: bool = False):
     """Record a post as sent."""
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute(
             """INSERT OR REPLACE INTO sent_posts 
-               (source, source_id, content_hash, title, sent_to_telegram, sent_to_facebook)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (source, source_id, _content_hash(content), title, telegram, facebook)
+               (source, source_id, content_hash, title, sent_to_telegram, sent_to_facebook, sent_to_instagram)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (source, source_id, _content_hash(content), title, telegram, facebook, instagram)
         )
         await db.commit()
 
@@ -128,14 +135,24 @@ async def get_stats() -> dict:
         )
         today = (await cursor.fetchone())[0]
 
-        # By source
+        # By source (scraped FROM)
         cursor = await db.execute(
             "SELECT source, COUNT(*) as count FROM sent_posts GROUP BY source"
         )
         by_source = {row[0]: row[1] for row in await cursor.fetchall()}
 
+        # By destination (sent TO each platform)
+        cursor = await db.execute("SELECT SUM(sent_to_telegram), SUM(sent_to_facebook), SUM(sent_to_instagram) FROM sent_posts")
+        row = await cursor.fetchone()
+        by_destination = {
+            "telegram": int(row[0] or 0),
+            "facebook": int(row[1] or 0),
+            "instagram": int(row[2] or 0),
+        }
+
         return {
             "total_posts": total,
             "posts_today": today,
             "by_source": by_source,
+            "by_destination": by_destination,
         }

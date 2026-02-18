@@ -752,7 +752,7 @@ DASHBOARD_HTML = """
 
     <div class="container">
 
-        <!-- Stats -->
+        <!-- Stats Grid -->
         <div class="stats-grid">
             <div class="stat-card total">
                 <div class="stat-label">Total Forwarded</div>
@@ -762,13 +762,39 @@ DASHBOARD_HTML = """
                 <div class="stat-label">Today</div>
                 <div class="stat-value" id="stat-today">0</div>
             </div>
+        </div>
+
+        <!-- Sent To Stats -->
+        <div class="section-title" style="margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">📤 Sent To</div>
+        <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
             <div class="stat-card tg">
                 <div class="stat-label">Telegram</div>
-                <div class="stat-value" id="stat-telegram">0</div>
+                <div class="stat-value" id="stat-sent-tg">0</div>
+            </div>
+            <div class="stat-card fb">
+                <div class="stat-label">Facebook</div>
+                <div class="stat-value" id="stat-sent-fb">0</div>
+            </div>
+            <div class="stat-card" style="border-top: 2px solid var(--accent);">
+                <div class="stat-label" style="color:var(--accent);">Instagram</div>
+                <div class="stat-value" id="stat-sent-ig" style="color:var(--accent);">0</div>
+            </div>
+        </div>
+
+        <!-- Source Stats -->
+        <div class="section-title" style="margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">📥 Scraped From</div>
+        <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="stat-card tg">
+                <div class="stat-label">Telegram</div>
+                <div class="stat-value" id="stat-source-tg">0</div>
             </div>
             <div class="stat-card x-card">
                 <div class="stat-label">X (Twitter)</div>
-                <div class="stat-value" id="stat-x">0</div>
+                <div class="stat-value" id="stat-source-x">0</div>
+            </div>
+            <div class="stat-card fb">
+                <div class="stat-label">Facebook</div>
+                <div class="stat-value" id="stat-source-fb">0</div>
             </div>
         </div>
 
@@ -823,6 +849,16 @@ DASHBOARD_HTML = """
                     <button class="btn btn-primary btn-sm" onclick="addItem('x_hashtags', 'x-hashtag-input')">Add</button>
                 </div>
                 <div class="tags" id="x-hashtag-tags"></div>
+            </div>
+
+            <div class="setting-group">
+                <h3>Facebook Pages (Source)</h3>
+                <div class="help-text">Facebook Page IDs to monitor</div>
+                <div class="tag-input-container">
+                    <input type="text" id="fb-source-input" placeholder="Page ID (e.g. 10001234567890)">
+                    <button class="btn primary" onclick="addItem('facebook_sources', 'fb-source-input')">Add</button>
+                </div>
+                <div class="tags" id="fb-source-tags"></div>
             </div>
         </div>
 
@@ -890,6 +926,17 @@ DASHBOARD_HTML = """
                     </div>
                     <label class="toggle">
                         <input type="checkbox" id="facebook-toggle" onchange="toggleFacebook()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-label">📸 Instagram</div>
+                        <div class="setting-desc">Also post to your Instagram account</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="instagram-toggle" onchange="toggleInstagram()">
                         <span class="slider"></span>
                     </label>
                 </div>
@@ -998,6 +1045,30 @@ DASHBOARD_HTML = """
                     </div>
                 </div>
 
+                <!-- Instagram -->
+                <div class="accordion" id="acc-ig">
+                    <div class="accordion-header" onclick="toggleAccordion('acc-ig')">
+                        <div class="accordion-header-left">
+                            <div class="accordion-icon" style="background:var(--accent-dim);">📸</div>
+                            <span class="accordion-title">Instagram Graph API</span>
+                            <span class="accordion-badge" id="badge-ig">—</span>
+                        </div>
+                        <span class="accordion-chevron">▼</span>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="api-hint" style="margin-bottom:0.5rem;">Meta Business Suite → Graph API Explorer</div>
+                        <div class="api-field">
+                            <label>Account ID</label>
+                            <input type="text" id="api-ig-account-id" placeholder="17841400000000000">
+                        </div>
+                        <div class="api-field">
+                            <label>Access Token</label>
+                            <input type="password" id="api-ig-token" placeholder="EAA...">
+                            <div class="api-hint">Token with <code>instagram_content_publish</code> permission</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div style="display:flex; justify-content:flex-end; margin-top:0.8rem;">
                     <button class="btn btn-save" onclick="saveApiKeys()">💾 Save API Keys</button>
                 </div>
@@ -1080,10 +1151,22 @@ DASHBOARD_HTML = """
         async function loadStats() {
             const res = await fetch('/api/stats');
             const d = await res.json();
+            
+            // Basic stats
             document.getElementById('stat-total').textContent = d.total_posts || 0;
             document.getElementById('stat-today').textContent = d.posts_today || 0;
-            document.getElementById('stat-telegram').textContent = d.by_source?.telegram || 0;
-            document.getElementById('stat-x').textContent = d.by_source?.x || 0;
+
+            // Source stats
+            const sources = d.by_source || {};
+            document.getElementById('stat-source-tg').textContent = sources.telegram || 0;
+            document.getElementById('stat-source-x').textContent = sources.x || 0;
+            document.getElementById('stat-source-fb').textContent = sources.facebook || 0;
+
+            // Destination stats
+            const dests = d.by_destination || {};
+            document.getElementById('stat-sent-tg').textContent = dests.telegram || 0;
+            document.getElementById('stat-sent-fb').textContent = dests.facebook || 0;
+            document.getElementById('stat-sent-ig').textContent = dests.instagram || 0;
         }
 
         async function loadActivity() {
@@ -1114,6 +1197,7 @@ DASHBOARD_HTML = """
                         <div class="post-badges">
                             ${p.sent_to_telegram ? '<span class="badge tg">Telegram</span>' : ''}
                             ${p.sent_to_facebook ? '<span class="badge fb">Facebook</span>' : ''}
+                            ${p.sent_to_instagram ? '<span class="badge ig" style="background:var(--instagram);color:white;">Instagram</span>' : ''}
                         </div>
                     </div>
                 </div>
@@ -1125,10 +1209,12 @@ DASHBOARD_HTML = """
             renderTags('tg-channel-tags', currentSettings.telegram_sources || [], 'telegram_sources');
             renderTags('x-account-tags', currentSettings.x_accounts || [], 'x_accounts');
             renderTags('x-hashtag-tags', currentSettings.x_hashtags || [], 'x_hashtags');
+            renderTags('fb-source-tags', currentSettings.facebook_sources || [], 'facebook_sources');
             renderTags('include-keyword-tags', currentSettings.filter_include_keywords || [], 'filter_include_keywords');
             renderTags('exclude-keyword-tags', currentSettings.filter_exclude_keywords || [], 'filter_exclude_keywords');
             document.getElementById('filter-mode').value = currentSettings.filter_mode || 'all';
             document.getElementById('facebook-toggle').checked = currentSettings.facebook_posting_enabled || false;
+            document.getElementById('instagram-toggle').checked = currentSettings.instagram_posting_enabled || false;
             loadApiStatus();
             loadApiKeys();
         }
@@ -1166,6 +1252,16 @@ DASHBOARD_HTML = """
 
         async function toggleFacebook() {
             currentSettings.facebook_posting_enabled = document.getElementById('facebook-toggle').checked;
+            await saveSettings();
+        }
+
+        async function toggleInstagram() {
+            currentSettings.instagram_posting_enabled = document.getElementById('instagram-toggle').checked;
+            await saveSettings();
+        }
+
+        async function toggleInstagram() {
+            currentSettings.instagram_posting_enabled = document.getElementById('instagram-toggle').checked;
             await saveSettings();
         }
 
@@ -1208,6 +1304,7 @@ DASHBOARD_HTML = """
             if (t.id === 'tg-channel-input') addItem('telegram_sources', 'tg-channel-input');
             else if (t.id === 'x-account-input') addItem('x_accounts', 'x-account-input');
             else if (t.id === 'x-hashtag-input') addItem('x_hashtags', 'x-hashtag-input');
+            else if (t.id === 'fb-source-input') addItem('facebook_sources', 'fb-source-input');
             else if (t.id === 'include-keyword-input') addItem('filter_include_keywords', 'include-keyword-input');
             else if (t.id === 'exclude-keyword-input') addItem('filter_exclude_keywords', 'exclude-keyword-input');
         });
@@ -1221,7 +1318,8 @@ DASHBOARD_HTML = """
                     TELEGRAM_API_ID: 'api-tg-api-id', TELEGRAM_API_HASH: 'api-tg-api-hash',
                     TELEGRAM_PHONE: 'api-tg-phone', TELEGRAM_BOT_TOKEN: 'api-tg-bot-token',
                     TELEGRAM_CHANNEL_ID: 'api-tg-channel-id', X_BEARER_TOKEN: 'api-x-bearer',
-                    FACEBOOK_PAGE_ACCESS_TOKEN: 'api-fb-token', FACEBOOK_PAGE_ID: 'api-fb-page-id'
+                    FACEBOOK_PAGE_ACCESS_TOKEN: 'api-fb-token', FACEBOOK_PAGE_ID: 'api-fb-page-id',
+                    INSTAGRAM_ACCOUNT_ID: 'api-ig-account-id', INSTAGRAM_ACCESS_TOKEN: 'api-ig-token'
                 };
                 for (const [k, id] of Object.entries(map)) {
                     if (d[k]) document.getElementById(id).placeholder = d[k];
@@ -1234,7 +1332,10 @@ DASHBOARD_HTML = """
             const d = await res.json();
 
             // Status overview
-            const labels = { telegram_user: '📡 Telegram User', telegram_bot: '🤖 Telegram Bot', x_api: '𝕏  X API', facebook: '📘 Facebook' };
+            const labels = { 
+                telegram_user: '📡 Telegram User', telegram_bot: '🤖 Telegram Bot', 
+                x_api: '𝕏  X API', facebook: '📘 Facebook', instagram: '📸 Instagram' 
+            };
             document.getElementById('api-status').innerHTML = Object.entries(d).map(([k, ok]) => `
                 <div class="setting-row">
                     <div class="setting-label">${labels[k] || k}</div>
@@ -1245,7 +1346,10 @@ DASHBOARD_HTML = """
             `).join('');
 
             // Accordion badges
-            const badgeMap = { telegram_user: 'badge-tg-user', telegram_bot: 'badge-tg-bot', x_api: 'badge-x', facebook: 'badge-fb' };
+            const badgeMap = { 
+                telegram_user: 'badge-tg-user', telegram_bot: 'badge-tg-bot', 
+                x_api: 'badge-x', facebook: 'badge-fb', instagram: 'badge-ig' 
+            };
             for (const [k, id] of Object.entries(badgeMap)) {
                 const el = document.getElementById(id);
                 if (d[k]) { el.textContent = '✓ Ready'; el.className = 'accordion-badge ok'; }
@@ -1259,6 +1363,7 @@ DASHBOARD_HTML = """
                 'api-tg-phone': 'TELEGRAM_PHONE', 'api-tg-bot-token': 'TELEGRAM_BOT_TOKEN',
                 'api-tg-channel-id': 'TELEGRAM_CHANNEL_ID', 'api-x-bearer': 'X_BEARER_TOKEN',
                 'api-fb-token': 'FACEBOOK_PAGE_ACCESS_TOKEN', 'api-fb-page-id': 'FACEBOOK_PAGE_ID',
+                'api-ig-account-id': 'INSTAGRAM_ACCOUNT_ID', 'api-ig-token': 'INSTAGRAM_ACCESS_TOKEN'
             };
             const creds = {};
             for (const [id, k] of Object.entries(fields)) {
@@ -1451,6 +1556,8 @@ def save_credentials():
                 "X_BEARER_TOKEN": "X Bearer Token",
                 "FACEBOOK_PAGE_ACCESS_TOKEN": "Facebook Page Token",
                 "FACEBOOK_PAGE_ID": "Facebook Page ID",
+                "INSTAGRAM_ACCOUNT_ID": "Instagram Account ID",
+                "INSTAGRAM_ACCESS_TOKEN": "Instagram Access Token",
             }
             updated_names = [key_labels.get(k, k) for k in data.keys()]
             loop.run_until_complete(
@@ -1615,6 +1722,33 @@ def save_credentials():
             elif "FACEBOOK_PAGE_ACCESS_TOKEN" in data or "FACEBOOK_PAGE_ID" in data:
                 loop.run_until_complete(
                     db_log("warning", "⚠️ Facebook Page — missing token or page ID", "facebook")
+                )
+
+            # Check Instagram
+            if config.INSTAGRAM_ACCOUNT_ID and config.INSTAGRAM_ACCESS_TOKEN:
+                try:
+                    resp = http_requests.get(
+                        f"https://graph.facebook.com/v21.0/{config.INSTAGRAM_ACCOUNT_ID}",
+                        params={"access_token": config.INSTAGRAM_ACCESS_TOKEN, "fields": "username"},
+                        timeout=10
+                    )
+                    ig_data = resp.json()
+                    if "username" in ig_data:
+                        loop.run_until_complete(
+                            db_log("info", f"✅ Instagram — connected to @{ig_data['username']}", "instagram")
+                        )
+                    elif "error" in ig_data:
+                        err_msg = ig_data["error"].get("message", "Unknown error")
+                        loop.run_until_complete(
+                            db_log("error", f"❌ Instagram — {err_msg}", "instagram")
+                        )
+                except Exception as e:
+                    loop.run_until_complete(
+                        db_log("error", f"❌ Instagram — connection failed: {e}", "instagram")
+                    )
+            elif "INSTAGRAM_ACCOUNT_ID" in data:
+                loop.run_until_complete(
+                    db_log("warning", "⚠️ Instagram — configured but missing ID or Token", "instagram")
                 )
 
         finally:

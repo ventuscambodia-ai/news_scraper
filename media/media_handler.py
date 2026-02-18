@@ -155,6 +155,43 @@ async def download_x_media(media_obj) -> tuple:
         return None, None
 
 
+async def download_url_media(url: str, media_type: str = "photo") -> tuple:
+    """
+    Download media from a URL (used for Facebook scraper).
+
+    Args:
+        url: Direct URL to the media file
+        media_type: "photo" or "video"
+
+    Returns:
+        Tuple of (file_path, media_type) or (None, None)
+    """
+    try:
+        extension = ".jpg" if media_type == "photo" else ".mp4"
+        filename = f"{uuid.uuid4().hex[:12]}{extension}"
+        file_path = config.MEDIA_TMP_DIR / filename
+
+        logger.debug(f"⬇️  Downloading {media_type}: {url[:80]}...")
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    with open(file_path, "wb") as f:
+                        async for chunk in resp.content.iter_chunked(8192):
+                            f.write(chunk)
+
+                    size_mb = file_path.stat().st_size / (1024 * 1024)
+                    logger.info(f"✅ Downloaded {media_type}: {filename} ({size_mb:.1f}MB)")
+                    return str(file_path), media_type
+                else:
+                    logger.warning(f"⚠️  Media download failed: HTTP {resp.status}")
+                    return None, None
+
+    except Exception as e:
+        logger.error(f"❌ URL media download error: {e}", exc_info=True)
+        return None, None
+
+
 def cleanup_media(file_path: str):
     """Delete a temporary media file after it's been sent."""
     try:
