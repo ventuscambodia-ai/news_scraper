@@ -1,4 +1,4 @@
-telethon==1.36.0
+telethon==1.42.0
 python-telegram-bot==21.6
 tweepy==4.14.0
 aiosqlite==0.20.0
